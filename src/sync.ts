@@ -1,11 +1,11 @@
 // Optional cloud sync. Local-first: everything works signed out; signing in merges projects by id, last write wins.
 import { useSyncExternalStore } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { clearTombstones, getData, getProjects, loadProjects, onProjectChange, putData, saveProject, tombstones, type Project, type Snapshot } from './store.ts'
-import type { Dataset } from './engine/types.ts'
+import { clearTombstones, getData, getProjects, loadProjects, onProjectChange, putData, saveProject, tombstones, type Dataset, type Project } from './store.ts'
+import type { Snapshot } from './engine/rules.ts'
 
-export const APP_ID = 'variance-pack'
-/** Ledgers above this stay on the device; mapping, commentary, checklist and snapshots always sync. */
+export const APP_ID = 'license-trim'
+/** Report data above this stays on the device; settings, prices, decisions and snapshots always sync. */
 export const RAW_SYNC_LIMIT = 1_500_000
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -157,7 +157,7 @@ async function doSync() {
         if (e2) throw e2
       }
       const missingDown = cvs.filter(v => !now.snapshots.some(s => s.id === v.id))
-      if (missingDown.length) await saveProject({ ...now, snapshots: [...now.snapshots, ...missingDown].sort((a, b) => a.period.localeCompare(b.period) || a.createdAt - b.createdAt) }, { touch: false, silent: true })
+      if (missingDown.length) await saveProject({ ...now, snapshots: [...now.snapshots, ...missingDown].sort((a, b) => a.createdAt - b.createdAt) }, { touch: false, silent: true })
     }
     set({ status: 'synced', lastSynced: Date.now() })
   } catch (e) {

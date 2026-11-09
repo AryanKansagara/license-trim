@@ -1,56 +1,44 @@
 import { useSyncExternalStore } from 'react'
-import type { Note } from './engine/commentary.ts'
-import type { Config, Dataset } from './engine/types.ts'
+import type { Kind } from './engine/parse.ts'
+import { DEFAULT_SETTINGS, type Decision, type Settings, type Snapshot, type Source } from './engine/rules.ts'
 
 export interface ImportMeta {
   id: string
-  kind: 'actuals' | 'budget' | 'mapping' | 'tb'
+  kind: Kind
   fileName: string
   format: string
   rows: number
   issues: number
-  periods: string[]
+  refreshDate: string | null
   at: number
 }
 
-export type CheckStatus = 'open' | 'in-progress' | 'done' | 'n/a'
-export interface CheckItem { status: CheckStatus; owner: string }
-
-export interface SnapRow { account: string; name: string; section: string; kind: 'revenue' | 'expense'; actual: number; budget: number; variance: number; pct: number | null; flagged: boolean; favourable: boolean; note?: string }
-export interface Snapshot {
-  id: string
-  period: string
-  label: string
-  createdAt: number
-  rows: SnapRow[]
-  netIncome: { actual: number; budget: number }
-  approved: number
-  flagged: number
-}
+/** Raw per-report rows. Stays on the device; synced only when small. */
+export interface Dataset { sources: Source[]; seats?: Record<string, number> }
 
 export interface Project {
   id: string
   name: string
   createdAt: number
   updatedAt: number
-  config: Config
-  /** The close period being worked. */
-  period: string | null
-  /** Commentary keyed by `${period}|${account}`. */
-  notes: Record<string, Note>
-  /** Flux checklist keyed by `${period}|${account}`. */
-  checklist: Record<string, CheckItem>
+  /** Price overrides by catalogue id (USD per user per month). */
+  prices: Record<string, number>
+  settings: Settings
+  /** Purchased seats per catalogue id, for the renewal planner. */
+  seats: Record<string, number>
+  /** Approve / reject per recommendation, keyed by recKey. */
+  decisions: Record<string, Decision>
   snapshots: Snapshot[]
   imports: ImportMeta[]
-  /** Built-in synthetic company; its ledger is regenerated instead of stored. */
+  /** Built-in synthetic tenant; its reports are regenerated instead of stored. */
   sampleId?: string
-  /** True when this device has no copy of the ledger (synced from another device). */
+  /** True when this device has no copy of the reports (synced from another device). */
   dataMissing?: boolean
 }
 
 // ---------- Tiny IndexedDB wrapper (falls back to memory in private modes) ----------
 
-const DB = 'variance-pack'
+const DB = 'license-trim'
 let dbp: Promise<IDBDatabase | null> | null = null
 function db(): Promise<IDBDatabase | null> {
   return dbp ??= new Promise(res => {
@@ -148,7 +136,7 @@ export const putData = (id: string, ds: Dataset) => idbPut('data', ds, id)
 export const uuid = () => crypto.randomUUID()
 
 // Tombstones keep a project deleted offline from coming back on the next sync.
-const TOMB = 'variance-pack.tombstones'
+const TOMB = 'license-trim.tombstones'
 export const tombstones = (): string[] => { try { return JSON.parse(localStorage.getItem(TOMB) ?? '[]') } catch { return [] } }
 const addTombstone = (id: string) => localStorage.setItem(TOMB, JSON.stringify([...new Set([...tombstones(), id])]))
 const removeTombstone = (id: string) => localStorage.setItem(TOMB, JSON.stringify(tombstones().filter(x => x !== id)))
@@ -156,15 +144,14 @@ export const clearTombstones = (ids: string[]) => localStorage.setItem(TOMB, JSO
 
 // ---------- App defaults (settings page) ----------
 
-export interface Defaults { abs: number; pct: number; basis: Config['basis']; reportingCurrency: string; preparer: string }
-const DEF_KEY = 'variance-pack.defaults'
-const BASE_DEFAULTS: Defaults = { abs: 10000, pct: 0.1, basis: 'budget', reportingCurrency: 'USD', preparer: '' }
+export interface Defaults { settings: Settings; msp: boolean; preparer: string }
+const DEF_KEY = 'license-trim.defaults'
+const BASE_DEFAULTS: Defaults = { settings: DEFAULT_SETTINGS, msp: false, preparer: '' }
 export function getDefaults(): Defaults {
-  try { return { ...BASE_DEFAULTS, ...JSON.parse(localStorage.getItem(DEF_KEY) ?? '{}') } } catch { return BASE_DEFAULTS }
+  try {
+    const d = JSON.parse(localStorage.getItem(DEF_KEY) ?? '{}')
+    return { ...BASE_DEFAULTS, ...d, settings: { ...DEFAULT_SETTINGS, ...d.settings } }
+  } catch { return BASE_DEFAULTS }
 }
 export const setDefaults = (d: Defaults) => localStorage.setItem(DEF_KEY, JSON.stringify(d))
-
-export function blankConfig(): Config {
-  const d = getDefaults()
-  return { mapping: [], entities: [], reportingCurrency: d.reportingCurrency, thresholds: { abs: d.abs, pct: d.pct }, basis: d.basis }
-}
+export const resetDefaults = () => localStorage.removeItem(DEF_KEY)

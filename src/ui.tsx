@@ -25,8 +25,8 @@ export function Link({ href, children, ...rest }: AnchorHTMLAttributes<HTMLAncho
 
 export const fmtUsd = (n: number, d = 0) => `${n < -0.5 * 10 ** -d ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}`
 export const fmtPct = (n: number | null, d = 0) => n === null ? 'n/a' : `${(n * 100).toFixed(d)}%`
-export const fmtMonth = (m: string) => new Date(m + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-export const fmtMonthShort = (m: string) => new Date(m + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' })
+export const fmtDate = (d: string | null | undefined) => d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'Never'
+export const fmtNum = (n: number) => n.toLocaleString('en-US')
 export const signed = (n: number, f: (n: number) => string) => (n > 0 ? '+' : n < 0 ? '−' : '') + f(Math.abs(n))
 
 // ---------- Theme ----------
@@ -56,7 +56,7 @@ export function ThemeToggle() {
   )
 }
 
-export const Monogram = () => <span className="monogram" aria-hidden="true">VP</span>
+export const Monogram = () => <span className="monogram" aria-hidden="true">LT</span>
 
 // ---------- Toasts with undo ----------
 
@@ -134,7 +134,7 @@ export function download(name: string, content: string | Blob, type = 'text/csv'
 export function Code({ code, label }: { code: string; label?: string }) {
   return (
     <div className="code">
-      <div className="code-head"><span>{label ?? 'SQL'}</span><CopyButton text={code} /></div>
+      <div className="code-head"><span>{label ?? 'PowerShell'}</span><CopyButton text={code} /></div>
       <pre><code>{code}</code></pre>
     </div>
   )
@@ -222,7 +222,7 @@ function AccountMenu() {
               void run(() => mode === 'in' ? signIn(email, pw) : signUp(email, pw), mode === 'in' ? 'Signed in. Syncing your projects.' : 'Account created. Syncing your projects.')
             }}>
               <h3>{mode === 'in' ? 'Sign in to sync' : 'Create an account'}</h3>
-              <p className="muted small">Optional. Everything works signed out. Signing in syncs mapping, commentary, checklists and snapshots across devices. Ledgers over 1.5 MB stay on this device.</p>
+              <p className="muted small">Optional. Everything works signed out. Signing in syncs tenants, prices, decisions and snapshots across devices. Report data over 1.5 MB stays on this device.</p>
               {!cloudConfigured && <p className="error small">Sync is not configured for this build.</p>}
               <label className="field"><span>Email</span><input name="email" type="email" required autoComplete="email" /></label>
               <label className="field"><span>Password</span><input name="password" type="password" required minLength={6} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} /></label>
@@ -235,10 +235,10 @@ function AccountMenu() {
               <div><div className="muted small">Signed in as</div><strong className="break">{s.user.email}</strong></div>
               <div className="row gap-sm"><SyncPill />{s.error && <span className="error small">{s.error}</span>}</div>
               <button type="button" className="btn ghost sm block" disabled={busy} onClick={() => void run(syncNow)}>Sync now</button>
-              <button type="button" className="btn ghost sm block" onClick={() => void run(async () => download(`variance-pack-export-${new Date().toISOString().slice(0, 10)}.json`, await exportAll()))}>Export all my data (JSON)</button>
+              <button type="button" className="btn ghost sm block" onClick={() => void run(async () => download(`license-trim-export-${new Date().toISOString().slice(0, 10)}.json`, await exportAll()))}>Export all my data (JSON)</button>
               <button type="button" className="btn ghost sm block" onClick={() => void run(signOut, 'Signed out. Your projects stay on this device.')}>Sign out</button>
               <hr />
-              <button type="button" className="btn danger-ghost sm block" disabled={busy} onClick={async () => { if (await ask('Delete cloud data?', 'Removes every Variance Pack project and snapshot from the cloud. Copies on this device are kept.', 'Delete cloud data')) void run(deleteCloudData, 'Cloud data deleted.') }}>Delete my cloud data</button>
+              <button type="button" className="btn danger-ghost sm block" disabled={busy} onClick={async () => { if (await ask('Delete cloud data?', 'Removes every License Trim tenant and snapshot from the cloud. Copies on this device are kept.', 'Delete cloud data')) void run(deleteCloudData, 'Cloud data deleted.') }}>Delete my cloud data</button>
               <button type="button" className="btn danger-ghost sm block" disabled={busy} onClick={async () => { if (await ask('Delete your account?', 'Deletes your account and all cloud data. Projects on this device are kept. This cannot be undone.', 'Delete account')) void run(deleteAccount, 'Account deleted.') }}>Delete my account</button>
               {err && <p className="error small" role="alert">{err}</p>}
             </div>
@@ -252,11 +252,11 @@ function AccountMenu() {
 export function Header() {
   const path = location.pathname
   const [menu, setMenu] = useState(false)
-  const nav = [['/', 'Product'], ['/app', 'Close packs'], ['/docs', 'Docs'], ['/settings', 'Settings']] as const
+  const nav = [['/', 'Product'], ['/app', 'Tenants'], ['/docs', 'Docs'], ['/settings', 'Settings']] as const
   return (
     <header className="header">
       <div className="header-inner">
-        <Link href="/" className="brand" aria-label="Variance Pack home"><Monogram /><span>Variance <b>Pack</b></span></Link>
+        <Link href="/" className="brand" aria-label="License Trim home"><Monogram /><span>License <b>Trim</b></span></Link>
         <nav className={`nav${menu ? ' open' : ''}`} aria-label="Main">
           {nav.map(([h, l]) => <Link key={h} href={h} onClick={() => setMenu(false)} aria-current={(h === '/' ? path === '/' : path.startsWith(h)) ? 'page' : undefined}>{l}</Link>)}
         </nav>
@@ -264,7 +264,7 @@ export function Header() {
           <SyncPill />
           <ThemeToggle />
           <AccountMenu />
-          {path === '/' && <Link href="/app" className="btn primary sm hide-sm">Start a close</Link>}
+          {path === '/' && <Link href="/app" className="btn primary sm hide-sm">Open the app</Link>}
           <button type="button" className="icon-btn burger" aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}>
             <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
           </button>
@@ -279,23 +279,23 @@ export function Footer() {
   return (
     <footer className="footer">
       <div className="footer-inner">
-        <div className="footer-brand"><Monogram /> <strong>Variance Pack</strong></div>
-        <nav className="footer-nav" aria-label="Footer"><Link href="/app">Close packs</Link><Link href="/docs">Docs</Link><Link href="/settings">Settings</Link></nav>
-        <p>Built by Aryan Kansagara. Independent project, not affiliated with Vena Solutions.</p>
-        <p className="muted small">Sample companies are synthetic. Your ledgers are parsed in your browser and stored on this device unless you sign in to sync.</p>
+        <div className="footer-brand"><Monogram /> <strong>License Trim</strong></div>
+        <nav className="footer-nav" aria-label="Footer"><Link href="/app">Tenants</Link><Link href="/docs">Docs</Link><Link href="/settings">Settings</Link></nav>
+        <p>Built by Aryan Kansagara. Independent project, not affiliated with Microsoft.</p>
+        <p className="muted small">Sample tenants are synthetic. Your exports are parsed in your browser and stored on this device unless you sign in to sync. Prices are list prices as dated in the price list.</p>
       </div>
     </footer>
   )
 }
 
 export function NotFound() {
-  useEffect(() => { document.title = 'Not found · Variance Pack' }, [])
+  useEffect(() => { document.title = 'Not found · License Trim' }, [])
   return (
     <section className="page narrow center notfound">
       <div className="nf-code" aria-hidden="true">404</div>
-      <h1>This page does not reconcile</h1>
-      <p className="muted">There is no line for this address in the chart of accounts. Variance: one page, fully unfavourable.</p>
-      <div className="row gap center-x"><Link href="/" className="btn ghost">Home</Link><Link href="/app" className="btn primary">Your close packs</Link></div>
+      <h1>This page has no licence</h1>
+      <p className="muted">Nothing is assigned at this address. We checked sign-ins and usage: zero activity in 90 days. Recommended action: remove.</p>
+      <div className="row gap center-x"><Link href="/" className="btn ghost">Home</Link><Link href="/app" className="btn primary">Your tenants</Link></div>
     </section>
   )
 }
@@ -304,4 +304,4 @@ export function Empty({ title, children, icon }: { title: string; children?: Rea
   return <div className="empty">{icon ?? <div className="empty-icon" aria-hidden="true" />}<h3>{title}</h3>{children}</div>
 }
 
-export const SyntheticBadge = () => <span className="badge synthetic" title="Generated data, not a real company">Synthetic</span>
+export const SyntheticBadge = () => <span className="badge synthetic" title="Generated data, not a real organisation">Synthetic</span>

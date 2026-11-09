@@ -327,7 +327,7 @@ export function parseRows(rows: string[][], d: Detected, idx: Map<string, Sku>):
     out.rows.push(u)
   }
   if (out.concealed > 3) issue(d.headerRow + 1, `${out.concealed} rows in total have concealed user names and were skipped.`)
-  for (const [n, k] of Object.entries(out.unknownLicenses)) issue(d.headerRow + 1, `Licence "${n}" (${k} users) is not in the price list; it is shown but not priced. Add it under Data → Price list.`, 'warning')
+  for (const [n, k] of Object.entries(out.unknownLicenses)) issue(d.headerRow + 1, `Licence "${n}" (${k} users) is not in the price list, so it is left out of spend and savings.`, 'warning')
   return out
 }
 
