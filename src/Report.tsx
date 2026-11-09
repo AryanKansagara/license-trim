@@ -31,7 +31,7 @@ export default function Report({ id }: { id: string }) {
           <div className="monogram" aria-hidden="true">LT</div>
           <div>
             <h1>Microsoft 365 licence cost review</h1>
-            <p>{project.name}{project.sampleId ? ' (synthetic sample data)' : ''} · usage as of {fmtDate(a.asOf)} · prepared {fmtDate(new Date().toISOString().slice(0, 10))}{preparer ? ` by ${preparer}` : ''}</p>
+            <p>{project.name.replace(' (synthetic)', '')}{project.sampleId ? ' (synthetic sample data)' : ''} · usage as of {fmtDate(a.asOf)} · prepared {fmtDate(new Date().toISOString().slice(0, 10))}{preparer ? ` by ${preparer}` : ''}</p>
           </div>
         </header>
         <section className="report-kpis">

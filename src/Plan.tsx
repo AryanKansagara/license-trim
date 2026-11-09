@@ -17,7 +17,7 @@ const slug = (s: string) => s.replace(/\s*\(synthetic\)/, '').replace(/[^\w]+/g,
 // ---------- Renewal planner ----------
 
 function Renewal({ project, model, update }: TabProps) {
-  const [scope, setScope] = useState<'approved' | 'all' | 'none'>('approved')
+  const [scope, setScope] = useState<'approved' | 'all' | 'none'>(() => model.analysis.recs.some(r => decisionOf(r, project.decisions) === 'approved') ? 'approved' : 'all')
   const a = model.analysis
   const apply = useMemo(() => new Set(a.recs.filter(r => scope === 'all' || (scope === 'approved' && decisionOf(r, project.decisions) === 'approved')).map(recKey)), [a, scope, project.decisions])
   const headroom = project.settings.headroom
@@ -74,8 +74,8 @@ function Script({ project, model }: TabProps) {
   const [view, setView] = useState<'change' | 'rollback' | 'csv'>('change')
   const approved = model.analysis.recs.filter(r => decisionOf(r, project.decisions) === 'approved')
   const opts = { tenant: project.name, generated: new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC' }
-  const change = useMemo(() => changeScript(approved, model.byId, opts), [approved, model])
-  const rollback = useMemo(() => changeScript(approved, model.byId, { ...opts, rollback: true }), [approved, model])
+  const change = useMemo(() => changeScript(approved, model.byId, { ...opts, file: `${slug(project.name)}-changes.ps1` }), [approved, model])
+  const rollback = useMemo(() => changeScript(approved, model.byId, { ...opts, rollback: true, file: `${slug(project.name)}-rollback.ps1` }), [approved, model])
   const csv = useMemo(() => changesCsv(model.analysis.recs, model.byId, r => decisionOf(r, project.decisions)), [model, project.decisions])
   const base = slug(project.name)
   if (!approved.length) return (

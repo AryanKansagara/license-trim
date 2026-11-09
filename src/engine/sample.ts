@@ -9,13 +9,13 @@ export const SAMPLES: SampleDef[] = [
     id: 'fabrikam', name: 'Fabrikam Engineering (synthetic)', domain: 'fabrikam-eng.example',
     blurb: '180 users plus 8 shared and room mailboxes on Microsoft 365 E3 and E5: 23 inactive E3s, E5s on light users, licensed shared mailboxes, idle Copilot seats.',
     asOf: '2026-10-31', prevAsOf: '2026-09-30', prices: {},
-    seats: { e3: 160, e5: 14, o365e3: 6, o365e1: 4, copilot: 15, pbipro: 3, entra1: 2, phone: 1 },
+    seats: { e3: 170, e5: 16, o365e3: 6, o365e1: 4, copilot: 20, pbipro: 3, entra1: 2, phone: 1, exo1: 1 },
   },
   {
     id: 'tailspin', name: 'Tailspin Community Trust (synthetic)', domain: 'tailspin-trust.example',
     blurb: '60-user nonprofit on Business Premium at nonprofit prices: leavers still licensed, a licensed shared inbox, volunteers on Business Standard.',
     asOf: '2026-10-31', prevAsOf: '2026-09-30', prices: { bp: 5.5, bs: 3, bb: 0 },
-    seats: { bp: 58, bs: 4, mdo1: 1 },
+    seats: { bp: 55, bs: 5, mdo1: 1 },
   },
 ]
 

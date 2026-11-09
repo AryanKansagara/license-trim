@@ -251,7 +251,7 @@ span.seat:hover { box-shadow: 0 0 0 2px var(--heading); z-index: 2; }
 .code-head .btn.ghost { background: transparent; color: #ddd; border-color: #555; }
 .code pre { margin: 0; padding: 1rem; overflow: auto; max-height: 520px; color: #d4d4d4; font: .8rem/1.55 var(--font-mono); }
 .code code { background: none; padding: 0; font-size: inherit; }
-.hero-code pre { max-height: 360px; }
+.hero-code pre { max-height: 360px; white-space: pre-wrap; word-break: break-all; }
 
 /* ---------- Workspace ---------- */
 .proj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
@@ -288,7 +288,7 @@ span.seat:hover { box-shadow: 0 0 0 2px var(--heading); z-index: 2; }
 .kpi-value { font-size: 1.55rem; font-weight: 600; color: var(--heading); line-height: 1.2; }
 .kpi.save .kpi-value { color: var(--save); }
 .bars { list-style: none; padding: 0; margin: 0; }
-.bars li { display: grid; grid-template-columns: minmax(130px, 1.2fr) 2fr auto; gap: .8rem; align-items: center; padding: .35rem 0; font-size: .875rem; }
+.bars li { display: grid; grid-template-columns: minmax(130px, 200px) 1fr 76px; gap: .8rem; align-items: center; padding: .35rem 0; font-size: .875rem; }
 .bar-label { text-decoration: none; color: var(--text); }
 .bar-track { height: 10px; background: var(--surface-3); border-radius: 2px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--brand); border-radius: 2px; transition: width .6s; }

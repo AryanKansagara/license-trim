@@ -272,6 +272,7 @@ export function parseRows(rows: string[][], d: Detected, idx: Map<string, Sku>):
   }
   if (c.upn === undefined) { issue(d.headerRow + 1, 'No user principal name column found. Map it below; every report is joined on UPN.'); return out }
   const seen = new Set<string>()
+  const firstLine: Record<string, number> = {}
   const act = ACTIVITY_OF[d.kind]
   for (let i = d.headerRow + 1; i < rows.length; i++) {
     const r = rows[i], ln = i + 1
@@ -309,7 +310,7 @@ export function parseRows(rows: string[][], d: Detected, idx: Map<string, Sku>):
       for (const n of names) {
         const k = resolveSku(n, idx)
         if (k) u.licenses.push(k.id)
-        else out.unknownLicenses[n] = (out.unknownLicenses[n] ?? 0) + 1
+        else { out.unknownLicenses[n] = (out.unknownLicenses[n] ?? 0) + 1; firstLine[n] ??= ln }
       }
     }
     const rt = toRecipient(get(r, 'recipientType')); if (rt) u.recipientType = rt
@@ -327,7 +328,7 @@ export function parseRows(rows: string[][], d: Detected, idx: Map<string, Sku>):
     out.rows.push(u)
   }
   if (out.concealed > 3) issue(d.headerRow + 1, `${out.concealed} rows in total have concealed user names and were skipped.`)
-  for (const [n, k] of Object.entries(out.unknownLicenses)) issue(d.headerRow + 1, `Licence "${n}" (${k} users) is not in the price list, so it is left out of spend and savings.`, 'warning')
+  for (const [n, k] of Object.entries(out.unknownLicenses)) issue(firstLine[n], `Licence "${n}" (${k} users) is not in the price list, so it is left out of spend and savings.`, 'warning')
   return out
 }
 

@@ -6,7 +6,7 @@ import { REASON_LABEL, type Rec } from './rules.ts'
 const psq = (s: string) => `'${s.replace(/'/g, "''")}'`
 const psArr = (xs: string[]) => `@(${xs.map(psq).join(', ')})`
 
-export interface ScriptOpts { tenant: string; generated: string; rollback?: boolean }
+export interface ScriptOpts { tenant: string; generated: string; rollback?: boolean; /** Saved file name, used in the usage lines. */ file?: string }
 
 /**
  * A Set-MgUserLicense script. Dry run by default: it checks each user exists and holds the licences to remove, and changes
@@ -14,7 +14,8 @@ export interface ScriptOpts { tenant: string; generated: string; rollback?: bool
  */
 export function changeScript(recs: Rec[], byId: Map<string, Sku>, o: ScriptOpts): string {
   const part = (id: string) => byId.get(id)?.part ?? id
-  const monthly = recs.reduce((t, r) => t + r.monthly, 0)
+  const monthly = recs.reduce((t, r) => t + r.monthly, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const file = o.file ?? (o.rollback ? 'license-trim-rollback.ps1' : 'license-trim-changes.ps1')
   const rows = recs.map(r => {
     const add = o.rollback ? r.remove : r.add
     const remove = o.rollback ? r.add : r.remove
@@ -25,10 +26,10 @@ export function changeScript(recs: Rec[], byId: Map<string, Sku>, o: ScriptOpts)
   License Trim ${o.rollback ? 'ROLLBACK' : 'change'} script
   Tenant:    ${o.tenant}
   Generated: ${o.generated}
-  Changes:   ${recs.length} user${recs.length === 1 ? '' : 's'}${o.rollback ? ' (restores the licences the change script removed)' : `, $${monthly.toFixed(2)} per month at list price`}
+  Changes:   ${recs.length} user${recs.length === 1 ? '' : 's'}${o.rollback ? ' (restores the licences the change script removed)' : `, $${monthly} per month at list price`}
 
-  Dry run (default):  .\\${o.rollback ? 'license-trim-rollback' : 'license-trim-changes'}.ps1
-  Apply the changes:  .\\${o.rollback ? 'license-trim-rollback' : 'license-trim-changes'}.ps1 -Apply
+  Dry run (default):  .\\${file}
+  Apply the changes:  .\\${file} -Apply
 
   Requires the Microsoft Graph PowerShell SDK:  Install-Module Microsoft.Graph.Users, Microsoft.Graph.Identity.DirectoryManagement -Scope CurrentUser
   Needs a role that can assign licences (License Administrator or User Administrator).
