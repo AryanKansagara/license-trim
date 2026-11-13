@@ -288,3 +288,97 @@ test('change script: dry run by default, resolves SKU ids by part number, rollba
   assert.equal(csv.trim().split('\n').length, 3)
   assert.match(csv, /MCOEV/)
 })
+
+// ---------- Real export layouts ----------
+// Header rows copied from Microsoft's documentation (Graph reportRoot CSV examples and the admin center Active users export);
+// the data rows are synthetic but follow the real value formats.
+
+const parse = (csv: string) => parseText(csv, idx)
+
+test('admin center Active users export: full column set, US dates with time, blocked sign-in and + separated licences', () => {
+  const { detected, parsed } = parse(`Block credential,City,Country/Region,Department,DirSyncEnabled,Display name,Fax,First name,Last dirsync time,Last name,Last password change time stamp,License assignment details,Licenses,Mobile Phone,Oath token metadata,Object Id,Office,Password never expires,Phone number,Postal code,Preferred data location,Preferred language,Proxy addresses,Release track,Soft deletion time stamp,State,Street address,Strong password required,Title,Usage location,User principal name,When created
+False,Seattle,United States,Finance,,Adele Vance,,Adele,,Vance,3/2/2026 4:11:07 PM,,Microsoft 365 E5+Microsoft Power Automate Free,,,6e7b768e-07e2-4810-8459-485f84f8f204,,False,,,,,SMTP:AdeleV@contoso.example,,,WA,,True,Retail Manager,US,AdeleV@contoso.example,8/12/2022 9:31:44 PM
+True,Redmond,United States,Sales,,Alex Wilber,,Alex,,Wilber,1/9/2026 10:02:51 AM,,Microsoft 365 E3,,,87d349ed-44d7-43e1-9a83-5f2406dee5bd,,False,,,,,SMTP:AlexW@contoso.example,,,WA,,True,Marketing Assistant,US,AlexW@contoso.example,8/12/2022 9:31:45 PM
+False,,,IT,,Diego Siciliani,,Diego,,Siciliani,,,Microsoft 365 Business Standard (no Teams)+Microsoft Copilot for Microsoft 365,,,1b2c3d4e-0000-4000-8000-000000000002,,False,,,,,,,,,,True,,US,DiegoS@contoso.example,1/5/2024 2:00:00 PM
+`)
+  assert.equal(detected.kind, 'users')
+  assert.deepEqual(parsed.issues, [])
+  const [adele, alex, diego] = parsed.rows
+  assert.deepEqual(adele, { upn: 'adelev@contoso.example', name: 'Adele Vance', department: 'Finance', enabled: true, created: '2022-08-12', licenses: ['e5', 'flowfree'] })
+  assert.equal(alex.enabled, false)
+  assert.deepEqual(diego.licenses, ['bs-nt', 'copilot'], 'Copilot under its official display name')
+})
+
+test('usage reports skip rows for users already deleted from the tenant', () => {
+  const { detected, parsed } = parse(`Report Refresh Date,User Principal Name,Display Name,Is Deleted,Deleted Date,Last Activity Date,Send Count,Receive Count,Read Count,Meeting Created Count,Meeting Interacted Count,Assigned Products,Report Period
+2026-11-10,AdeleV@contoso.example,Adele Vance,False,,2026-11-09,4,212,190,0,3,MICROSOFT 365 E5+MICROSOFT POWER AUTOMATE FREE,30
+2026-11-10,old.user@contoso.example,Old User,True,2026-10-20,2026-07-01,0,0,0,0,0,MICROSOFT 365 E3,30
+`)
+  assert.equal(detected.kind, 'email')
+  assert.equal(parsed.rows.length, 1)
+  assert.equal(parsed.deleted, 1)
+  assert.deepEqual(parsed.rows[0], { upn: 'adelev@contoso.example', name: 'Adele Vance', licenses: ['e5', 'flowfree'], exchange: '2026-11-09', sends: 4 })
+  assert.equal(parsed.refreshDate, '2026-11-10')
+  assert.match(parsed.issues[0].message, /1 row is for users already deleted/)
+  // A deleted user's old licences must not become a saving.
+  const a = analyze(join([{ kind: 'email', rows: parsed.rows, refreshDate: parsed.refreshDate }], '2026-11-10'), cat)
+  assert.ok(!a.users.some(v => v.user.upn === 'old.user@contoso.example'))
+})
+
+test('Microsoft 365 Apps report: Teams desktop alone is not desktop Office use', () => {
+  const { detected, parsed } = parse(`Report Refresh Date,User Principal Name,Last Activation Date,Last Activity Date,Report Period,Windows,Mac,Mobile,Web,Outlook,Word,Excel,PowerPoint,OneNote,Teams,Outlook (Windows),Word (Windows),Excel (Windows),PowerPoint (Windows),OneNote (Windows),Teams (Windows),Outlook (Mac),Word (Mac),Excel (Mac),PowerPoint (Mac),OneNote (Mac),Teams (Mac),Outlook (Mobile),Word (Mobile),Excel (Mobile),PowerPoint (Mobile),OneNote (Mobile),Teams (Mobile),Outlook (Web),Word (Web),Excel (Web),PowerPoint (Web),OneNote (Web),Teams (Web)
+2026-11-10,teamsonly@contoso.example,2026-05-22,2026-11-09,30,Yes,No,Yes,No,No,No,No,No,No,Yes,No,No,No,No,No,Yes,No,No,No,No,No,No,No,No,No,No,No,Yes,No,No,No,No,No,No
+2026-11-10,word@contoso.example,2026-05-22,2026-11-09,30,Yes,No,No,No,Yes,Yes,No,No,No,No,Yes,Yes,No,No,No,No,No,No,No,No,No,No,No,No,No,No,No,No,No,No,No,No,No,No
+2026-11-10,mac@contoso.example,2026-05-22,2026-11-09,30,No,Yes,No,No,No,No,Yes,No,No,No,No,No,No,No,No,No,No,No,Yes,No,No,No,No,No,No,No,No,No,No,No,No,No,No,No
+`)
+  assert.equal(detected.kind, 'apps')
+  assert.deepEqual(parsed.rows.map(r => [r.upn, r.desktop, r.apps]), [
+    ['teamsonly@contoso.example', false, '2026-11-09'], ['word@contoso.example', true, '2026-11-09'], ['mac@contoso.example', true, '2026-11-09'],
+  ])
+  // Without the per-app columns it falls back to Windows/Mac.
+  const short = parse('Report Refresh Date,User Principal Name,Last Activation Date,Last Activity Date,Windows,Mac\n2026-11-10,a@x.example,,2026-11-01,Yes,No\n')
+  assert.equal(short.parsed.rows[0].desktop, true)
+})
+
+test('Teams user activity report: User Id before UPN, chat counts summed, calls kept', () => {
+  const { detected, parsed } = parse(`Report Refresh Date,Tenant Display Name,Shared Channel Tenant Display Names,User Id,User Principal Name,Last Activity Date,Is Deleted,Deleted Date,Assigned Products,Team Chat Message Count,Private Chat Message Count,Call Count,Meeting Count,Post Messages,Reply Messages,Urgent Messages,Meetings Organized Count,Meetings Attended Count,Ad Hoc Meetings Organized Count,Ad Hoc Meetings Attended Count,Scheduled One-time Meetings Organized Count,Scheduled One-time Meetings Attended Count,Scheduled Recurring Meetings Organized Count,Scheduled Recurring Meetings Attended Count,Audio Duration,Video Duration,Screen Share Duration,Audio Duration In Seconds,Video Duration In Seconds,Screen Share Duration In Seconds,Has Other Action,Is Licensed,Report Period
+2026-11-10,Contoso,,6e7b768e-07e2-4810-8459-485f84f8f204,AdeleV@contoso.example,2026-11-08,False,,MICROSOFT 365 E5,12,40,3,5,0,0,0,1,4,0,1,0,2,1,1,PT1H2M,PT10M,PT0S,3720,600,0,No,Yes,30
+`)
+  assert.equal(detected.kind, 'teams')
+  assert.deepEqual(parsed.rows[0], { upn: 'adelev@contoso.example', licenses: ['e5'], teams: '2026-11-08', teamsMsgs: 52, calls: 3 })
+})
+
+test('Copilot usage report and Mailbox usage report map to the right workload', () => {
+  const cp = parse(`Report Refresh Date,Report Period,User Principal Name,Display Name,Last Activity Date,Microsoft Teams Copilot Last Activity Date,Word Copilot Last Activity Date,Excel Copilot Last Activity Date,PowerPoint Copilot Last Activity Date,Outlook Copilot Last Activity Date,OneNote Copilot Last Activity Date,Loop Copilot Last Activity Date,Copilot Chat Last Activity Date
+2026-11-10,30,DiegoS@contoso.example,Diego Siciliani,2026-09-01,,2026-09-01,,,,,,
+`)
+  assert.equal(cp.detected.kind, 'copilot')
+  assert.deepEqual(cp.parsed.rows[0], { upn: 'diegos@contoso.example', name: 'Diego Siciliani', copilot: '2026-09-01' })
+  const mb = parse(`Report Refresh Date,User Principal Name,Display Name,Is Deleted,Deleted Date,Created Date,Last Activity Date,Item Count,Storage Used (Byte),Issue Warning Quota (Byte),Prohibit Send Quota (Byte),Prohibit Send/Receive Quota (Byte),Deleted Item Count,Deleted Item Size (Byte),Deleted Item Quota (Byte),Has Archive,Report Period
+2026-11-10,AdeleV@contoso.example,Adele Vance,False,,2022-08-12,2026-11-09,18234,4123456789,105226698752,106300440576,107374182400,120,8123456,32212254720,True,7
+`)
+  assert.equal(mb.detected.kind, 'mailbox')
+  assert.deepEqual(mb.parsed.rows[0], { upn: 'adelev@contoso.example', name: 'Adele Vance', created: '2022-08-12', mailboxBytes: 4123456789, hasArchive: true, exchange: '2026-11-09' })
+})
+
+test('SKU part numbers match Microsoft\'s published licensing identifiers, including EEA and legacy variants', () => {
+  const part = (id: string) => byId.get(id)!.part
+  // From "Product names and service plan identifiers for licensing" (19 Aug 2026).
+  assert.equal(part('bb-nt'), 'Microsoft_365_Business_Basic_(no Teams)')
+  assert.equal(part('bs-nt'), 'MICROSOFT_365_BUSINESS_STANDARD_NO_TEAMS')
+  assert.equal(part('bp-nt'), 'Microsoft_365_ Business_ Premium_(no Teams)')
+  assert.equal(part('e5sec'), 'IDENTITY_THREAT_PROTECTION')
+  for (const [n, id] of [['O365_w/o_Teams_Bundle_M5', 'e5-nt'], ['O365_w/o Teams Bundle_M3', 'e3-nt'], ['M365_Copilot', 'copilot'], ['SMB_BUSINESS_PREMIUM', 'bs'],
+    ['Microsoft 365 Business Premium EEA (no Teams)', 'bp-nt'], ['Exchange Online Archiving for Exchange Online', 'eoa'], ['IDENTITY_THREAT_PROTECTION', 'e5sec']] as const)
+    assert.equal(resolveSku(n, idx)?.id, id, n)
+  // Purchased seats from Get-MgSubscribedSku resolve through the same names.
+  assert.deepEqual(seatsFromSkus([{ part: 'M365_Copilot', purchased: 10, consumed: 8 }, { part: 'Microsoft_365_Copilot', purchased: 5, consumed: 5 }, { part: 'MICROSOFT_365_BUSINESS_STANDARD_NO_TEAMS', purchased: 3, consumed: 3 }], cat),
+    { copilot: 15, 'bs-nt': 3 })
+})
+
+test('change script lists every published part number and resolves the first one the tenant has', () => {
+  const a = run([user({ licenses: ['e3', 'copilot'], copilot: undefined })])
+  const s = changeScript(a.recs, byId, { tenant: 'T', generated: '2026-11-08' })
+  assert.match(s, /Remove = @\('Microsoft_365_Copilot\|M365_Copilot'\)/)
+  assert.match(s, /foreach \(\$p in \$part -split '\\\|'\)/)
+})

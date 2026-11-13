@@ -1,5 +1,5 @@
 // Join reports per user, detect waste, right-size plans, price the savings, plan the renewal, and compare snapshots.
-import { E5_EXTRAS, type Feature, type Sku } from './catalog.ts'
+import { E5_EXTRAS, resolveSku, skuIndex, type Feature, type Sku } from './catalog.ts'
 import type { Kind, SkuSeats, UserRec } from './parse.ts'
 
 export interface Settings {
@@ -359,7 +359,8 @@ export function renewal(a: Analysis, catalog: Sku[], seats: Record<string, numbe
 /** Map Get-MgSubscribedSku rows (by skuPartNumber) to catalogue ids. */
 export function seatsFromSkus(rows: SkuSeats[], catalog: Sku[]): Record<string, number> {
   const out: Record<string, number> = {}
-  for (const r of rows) { const k = catalog.find(c => c.part.toLowerCase() === r.part.toLowerCase()); if (k) out[k.id] = (out[k.id] ?? 0) + r.purchased }
+  const idx = skuIndex(catalog)
+  for (const r of rows) { const k = resolveSku(r.part, idx); if (k) out[k.id] = (out[k.id] ?? 0) + r.purchased }
   return out
 }
 

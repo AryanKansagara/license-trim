@@ -77,7 +77,7 @@ export const KIND_LABEL: Record<Kind, string> = {
 export type Field =
   | 'upn' | 'name' | 'department' | 'enabled' | 'blocked' | 'created' | 'lastSignIn' | 'lastNonInteractive' | 'licenses' | 'recipientType'
   | 'mailboxBytes' | 'hasArchive' | 'lastActivity' | 'exchange' | 'onedrive' | 'sharepoint' | 'teams' | 'apps' | 'copilot'
-  | 'desktop' | 'win' | 'mac' | 'sends' | 'teamChat' | 'privateChat' | 'calls' | 'refresh' | 'part' | 'purchased' | 'consumed'
+  | 'desktop' | 'win' | 'mac' | 'sends' | 'teamChat' | 'privateChat' | 'calls' | 'refresh' | 'part' | 'purchased' | 'consumed' | 'deleted'
 
 export const FIELD_LABEL: Record<Field, string> = {
   upn: 'User principal name', name: 'Display name', department: 'Department', enabled: 'Account enabled', blocked: 'Block credential (sign-in blocked)',
@@ -86,7 +86,7 @@ export const FIELD_LABEL: Record<Field, string> = {
   exchange: 'Exchange last activity', onedrive: 'OneDrive last activity', sharepoint: 'SharePoint last activity', teams: 'Teams last activity',
   apps: 'Microsoft 365 Apps last activity', copilot: 'Copilot last activity', desktop: 'Uses desktop apps', win: 'Windows (apps)', mac: 'Mac (apps)',
   sends: 'Send count', teamChat: 'Team chat message count', privateChat: 'Private chat message count', calls: 'Call count',
-  refresh: 'Report refresh date', part: 'SKU part number', purchased: 'Purchased (prepaid) units', consumed: 'Consumed units',
+  refresh: 'Report refresh date', part: 'SKU part number', purchased: 'Purchased (prepaid) units', consumed: 'Consumed units', deleted: 'Is deleted',
 }
 
 const SYN: [Field, RegExp][] = [
@@ -120,6 +120,7 @@ const SYN: [Field, RegExp][] = [
   ['part', /^sku ?part ?number$/],
   ['purchased', /^(prepaid ?units|prepaid ?enabled|enabled units|purchased)$/],
   ['consumed', /^(consumed ?units|consumed)$/],
+  ['deleted', /^is ?deleted$/],
 ]
 
 export const normHeader = (h: string) => h.toLowerCase().replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -244,12 +245,14 @@ export interface Parsed {
   concealed: number
   unknownLicenses: Record<string, number>
   duplicates: number
+  /** Rows for users already deleted from the tenant (usage reports keep them for the period); skipped. */
+  deleted: number
   /** Report kinds whose evidence this file carries (the one-CSV export covers several). */
   covers: Kind[]
 }
 
 export function parseRows(rows: string[][], d: Detected, idx: Map<string, Sku>): Parsed {
-  const out: Parsed = { kind: d.kind, rows: [], skus: [], issues: [], refreshDate: null, concealed: 0, unknownLicenses: {}, duplicates: 0, covers: [d.kind] }
+  const out: Parsed = { kind: d.kind, rows: [], skus: [], issues: [], refreshDate: null, concealed: 0, unknownLicenses: {}, duplicates: 0, deleted: 0, covers: [d.kind] }
   const c = d.columns
   const issue = (line: number, message: string, level: Issue['level'] = 'error') => { if (out.issues.length < 500) out.issues.push({ line, message, level }) }
   const get = (r: string[], f: Field) => c[f] === undefined ? undefined : r[c[f]!]
@@ -274,12 +277,16 @@ export function parseRows(rows: string[][], d: Detected, idx: Map<string, Sku>):
   const seen = new Set<string>()
   const firstLine: Record<string, number> = {}
   const act = ACTIVITY_OF[d.kind]
+  // The Apps usage report's Windows/Mac columns are Yes for Teams desktop alone, which every plan includes.
+  // When the per-app columns are there, count only the Office desktop apps.
+  const officeDesktop = d.kind === 'apps' ? d.headers.flatMap((h, i) => /^(outlook|word|excel|powerpoint|onenote) \((windows|mac)\)$/.test(normHeader(h)) ? [i] : []) : []
   for (let i = d.headerRow + 1; i < rows.length; i++) {
     const r = rows[i], ln = i + 1
     if (!r.some(x => x)) continue
     const upnRaw = get(r, 'upn') ?? ''
     if (!upnRaw) { issue(ln, 'Missing user principal name; row skipped'); continue }
     if (isConcealed(upnRaw)) { out.concealed++; if (out.concealed <= 3) issue(ln, `User name is concealed (${upnRaw.slice(0, 8)}…). Turn off "Display concealed user, group, and site names in all reports" and export again.`); continue }
+    if (toBool(get(r, 'deleted'))) { out.deleted++; continue }
     const upn = upnRaw.toLowerCase()
     if (!upn.includes('@')) issue(ln, `"${upnRaw}" does not look like a UPN`, 'warning')
     if (seen.has(upn)) { out.duplicates++; issue(ln, `${upn} appears more than once; the later row wins`, 'warning') }
@@ -319,7 +326,8 @@ export function parseRows(rows: string[][], d: Detected, idx: Map<string, Sku>):
     for (const f of ['exchange', 'onedrive', 'sharepoint', 'teams', 'apps', 'copilot'] as const) { const v = date(f); if (v) u[f] = v }
     if (act && c.lastActivity !== undefined) { const v = date('lastActivity'); if (v) u[act] = v }
     if (c.desktop !== undefined) u.desktop = toBool(get(r, 'desktop')) ?? false
-    if (c.win !== undefined || c.mac !== undefined) u.desktop = !!(toBool(get(r, 'win')) || toBool(get(r, 'mac')))
+    if (officeDesktop.length) u.desktop = officeDesktop.some(i => toBool(r[i]))
+    else if (c.win !== undefined || c.mac !== undefined) u.desktop = !!(toBool(get(r, 'win')) || toBool(get(r, 'mac')))
     const sends = num('sends'); if (sends !== undefined) u.sends = sends
     if (c.teamChat !== undefined || c.privateChat !== undefined) u.teamsMsgs = (num('teamChat') ?? 0) + (num('privateChat') ?? 0)
     const calls = num('calls'); if (calls !== undefined) u.calls = calls
@@ -327,6 +335,7 @@ export function parseRows(rows: string[][], d: Detected, idx: Map<string, Sku>):
     if (ref && (!out.refreshDate || ref > out.refreshDate)) out.refreshDate = ref
     out.rows.push(u)
   }
+  if (out.deleted) issue(d.headerRow + 1, `${out.deleted} row${out.deleted === 1 ? ' is' : 's are'} for users already deleted from the tenant and ${out.deleted === 1 ? 'was' : 'were'} skipped.`, 'warning')
   if (out.concealed > 3) issue(d.headerRow + 1, `${out.concealed} rows in total have concealed user names and were skipped.`)
   for (const [n, k] of Object.entries(out.unknownLicenses)) issue(firstLine[n], `Licence "${n}" (${k} users) is not in the price list, so it is left out of spend and savings.`, 'warning')
   return out

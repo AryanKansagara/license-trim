@@ -1,4 +1,4 @@
-import { CATALOG_DATE, CATALOG_SOURCE, DEFAULT_CATALOG } from './engine/catalog.ts'
+import { CATALOG_DATE, CATALOG_SOURCE, IDS_SOURCE, DEFAULT_CATALOG } from './engine/catalog.ts'
 import { DEFAULT_SETTINGS } from './engine/rules.ts'
 import { GRAPH_EXPORT_SCRIPT } from './engine/script.ts'
 import { Code, fmtDate, fmtUsd, Link } from './ui.tsx'
@@ -66,10 +66,10 @@ export default function Docs() {
       </ul>
 
       <h2 id="prices">Price list</h2>
-      <p>US list prices as of {fmtDate(CATALOG_DATE)}, per user per month. {CATALOG_SOURCE} Nonprofit, education, government and CSP prices differ: edit them per tenant under Data → Price list.</p>
+      <p>US list prices as of {fmtDate(CATALOG_DATE)}, per user per month. {CATALOG_SOURCE} Nonprofit, education, government and CSP prices differ: edit them per tenant under Data → Price list. Part numbers and product names were checked against Microsoft's <a href={IDS_SOURCE} target="_blank" rel="noreferrer">Product names and service plan identifiers for licensing</a> list (CSV dated 19 August 2026); where Microsoft publishes more than one part number for a product (EEA bundles, legacy SKUs) the change script tries each in turn.</p>
       <div className="table-wrap"><table className="table">
         <thead><tr><th>SKU</th><th>Part number</th><th className="r">Price</th><th>Note</th></tr></thead>
-        <tbody>{key.map(k => <tr key={k.id}><td>{k.name}</td><td className="mono small">{k.part}</td><td className="r num">{fmtUsd(k.price, 2)}</td><td className="small muted">{k.note ?? ''}</td></tr>)}</tbody>
+        <tbody>{key.map(k => <tr key={k.id}><td>{k.name}</td><td className="mono small">{[k.part, ...(k.alt ?? [])].join(', ')}</td><td className="r num">{fmtUsd(k.price, 2)}</td><td className="small muted">{k.note ?? ''}</td></tr>)}</tbody>
       </table></div>
 
       <h2 id="apply">Running the change script</h2>

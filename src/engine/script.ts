@@ -13,7 +13,8 @@ export interface ScriptOpts { tenant: string; generated: string; rollback?: bool
  * nothing. Run with -Apply to make the changes. SKU ids are resolved from skuPartNumber in the tenant, so nothing is hard-coded.
  */
 export function changeScript(recs: Rec[], byId: Map<string, Sku>, o: ScriptOpts): string {
-  const part = (id: string) => byId.get(id)?.part ?? id
+  // Every published part number for the SKU, '|'-separated; Resolve-Sku uses the first one the tenant subscribes to.
+  const part = (id: string) => { const k = byId.get(id); return k ? [k.part, ...(k.alt ?? [])].join('|') : id }
   const monthly = recs.reduce((t, r) => t + r.monthly, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const file = o.file ?? (o.rollback ? 'license-trim-rollback.ps1' : 'license-trim-changes.ps1')
   const rows = recs.map(r => {
@@ -45,8 +46,8 @@ Connect-MgGraph -Scopes 'User.ReadWrite.All', 'Organization.Read.All' -NoWelcome
 $skus = @{}
 Get-MgSubscribedSku -All | ForEach-Object { $skus[$_.SkuPartNumber] = $_.SkuId }
 function Resolve-Sku([string]$part) {
-  if (-not $skus.ContainsKey($part)) { throw "SKU $part is not subscribed in this tenant" }
-  return $skus[$part]
+  foreach ($p in $part -split '\\|') { if ($skus.ContainsKey($p)) { return $skus[$p] } }
+  throw "SKU $part is not subscribed in this tenant"
 }
 
 $changes = @(
@@ -107,7 +108,8 @@ function Get-Report($name, $period) {
   $file = Join-Path $tmp "$name.csv"
   Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/reports/$name(period='$period')" -OutputFilePath $file
   $rows = @{}
-  Import-Csv $file | ForEach-Object { $rows[$_.'User Principal Name'.ToLower()] = $_ }
+  # Usage reports keep rows for users deleted during the period; skip them so they cannot shadow a live account.
+  Import-Csv $file | Where-Object { $_.'Is Deleted' -ne 'True' } | ForEach-Object { $rows[$_.'User Principal Name'.ToLower()] = $_ }
   return $rows
 }
 
@@ -145,7 +147,8 @@ $users | ForEach-Object {
     SharePointLastActivity  = $a.'SharePoint Last Activity Date'
     TeamsLastActivity       = $a.'Teams Last Activity Date'
     AppsLastActivity        = $p.'Last Activity Date'
-    DesktopApps             = if ($p) { if ($p.Windows -eq 'Yes' -or $p.Mac -eq 'Yes') { 'Yes' } else { 'No' } } else { '' }
+    # Office desktop apps only: the report's Windows/Mac columns are also Yes for the Teams desktop client.
+    DesktopApps             = if ($p) { if (@('Outlook','Word','Excel','PowerPoint','OneNote' | ForEach-Object { $p."$_ (Windows)"; $p."$_ (Mac)" }) -contains 'Yes') { 'Yes' } else { 'No' } } else { '' }
     EmailSends              = $e.'Send Count'
     TeamsMessages           = if ($t) { [int]$t.'Team Chat Message Count' + [int]$t.'Private Chat Message Count' } else { '' }
     TeamsCalls              = $t.'Call Count'
