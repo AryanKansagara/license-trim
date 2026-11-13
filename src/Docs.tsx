@@ -17,7 +17,7 @@ const REPORTS: { name: string; where: string; cols: string; use: string }[] = [
   { name: 'Mailbox usage', where: 'Reports → Usage → Exchange → Mailbox usage → Export', cols: 'User Principal Name, Storage Used (Byte), Prohibit Send Quota (Byte), Has Archive, Recipient Type', use: 'Shared and room mailboxes, quota check before downgrades' },
   { name: 'Teams user activity', where: 'Reports → Usage → Microsoft Teams → User activity → Export', cols: 'User Principal Name, Last Activity Date, Team Chat Message Count, Private Chat Message Count, Call Count', use: 'Teams-only users, calls before an E5 move' },
   { name: 'OneDrive / SharePoint activity', where: 'Reports → Usage → OneDrive (or SharePoint) → Activity → Export', cols: 'User Principal Name, Last Activity Date, Viewed Or Edited File Count', use: 'Activity, web app need' },
-  { name: 'Microsoft 365 Apps usage', where: 'Reports → Usage → Microsoft 365 Apps → Usage → Export', cols: 'User Principal Name, Last Activation Date, Last Activity Date, Windows, Mac, Mobile, Web', use: 'Desktop Office use (Windows or Mac = Yes)' },
+  { name: 'Microsoft 365 Apps usage', where: 'Reports → Usage → Microsoft 365 Apps → Usage → Export', cols: 'User Principal Name, Last Activity Date, Windows, Mac, and the per-app columns such as Word (Windows), Excel (Mac)', use: 'Desktop Office use: Outlook, Word, Excel, PowerPoint or OneNote on Windows or Mac. Teams desktop alone does not count, since every plan includes it' },
   { name: 'Copilot usage', where: 'Reports → Usage → Microsoft 365 Copilot → Usage → Export', cols: 'User Principal Name, Last Activity Date, per-app Copilot last activity dates', use: 'Idle Copilot seats' },
 ]
 
@@ -47,6 +47,7 @@ export default function Docs() {
 
       <h2 id="concealed">Concealed user names</h2>
       <p>Since 2021 the admin center hides user names in usage reports by default, replacing each UPN with a 32-character hash. Those rows cannot be joined to users, so the importer flags them with line numbers. To turn it off: <strong>Settings → Org settings → Services → Reports</strong>, clear <em>Display concealed user, group, and site names in all reports</em>, save, wait a few minutes, and export again. Turn it back on afterwards if your privacy policy requires it. The Graph script is affected by the same setting.</p>
+      <p>Usage reports also keep rows for users deleted during the report period (<em>Is Deleted</em> = True). Their licences are already released, so the importer skips those rows and says how many it skipped.</p>
 
       <h2 id="signins">Entra sign-in activity</h2>
       <p>The Active users export does not include last sign-in. Get it from Microsoft Graph (the Entra admin center's user download does not reliably include it):</p>
@@ -59,7 +60,7 @@ export default function Docs() {
         <li><strong>Blocked accounts</strong> holding paid licences: remove them. The mailbox is deleted 30 days later, so convert it to shared or put it on hold first if it must be kept.</li>
         <li><strong>Inactive</strong>: no sign-in and no activity in any workload for {s.inactiveDays} days (setting), skipping accounts created within that window. High confidence when both sign-in and usage data agree.</li>
         <li><strong>Duplicates</strong>: an add-on whose every feature is already in another assigned plan (E5 plus Teams Phone, Business Premium plus Entra ID P1), or two base plans.</li>
-        <li><strong>Right-sizing</strong>: the cheapest plan in the same family that still covers what the person used. Desktop apps are only dropped when the Apps usage report says no Windows or Mac use. The target mailbox must fit current use plus 25%. F1/F3 targets carry a frontline eligibility caveat and can be switched off.</li>
+        <li><strong>Right-sizing</strong>: the cheapest plan in the same family that still covers what the person used. Desktop apps are only dropped when the Apps usage report shows no Office desktop app use on Windows or Mac (the Teams desktop client does not count). The target mailbox must fit current use plus 25%. F1/F3 targets carry a frontline eligibility caveat and can be switched off.</li>
         <li><strong>E5 to E3</strong>: at most {s.lightSends} emails sent and {s.lightMsgs} Teams messages in the period and no calls. A standalone add-on the user also bought (Power BI Pro) is kept. Switch off per tenant if security policy relies on E5 for everyone.</li>
         <li><strong>Copilot</strong>: no Copilot activity in {s.copilotDays} days, from the Copilot usage report only.</li>
         <li><strong>Confidence</strong>: high, medium or low on each finding; a recommendation takes the lowest of its findings.</li>

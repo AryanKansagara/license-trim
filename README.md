@@ -17,6 +17,12 @@ Microsoft 365 is billed per seat, and seats drift: leavers are blocked but stay 
 - **MSP mode**: one project per client tenant with a roll-up.
 - Two synthetic sample tenants (clearly labelled), light and dark themes, optional account sync.
 
+## Formats tested
+
+The importer tests use the exact column layouts Microsoft documents for the Graph usage reports (Email activity, Mailbox usage, Microsoft 365 active users, Teams user activity, Microsoft 365 Apps, Copilot usage) and the admin center Active users export, with synthetic rows. SKU part numbers and product names are checked against Microsoft's [Product names and service plan identifiers for licensing](https://learn.microsoft.com/entra/identity/users/licensing-service-plan-reference) list (CSV dated 19 August 2026).
+
+Known gaps: Graph's usage reports carry no recipient type, so the one-CSV export cannot spot shared mailboxes on its own; import the admin center Mailbox usage export or mark them by hand. Copilot Business has no published part number in Microsoft's list yet.
+
 Everything runs in the browser and works signed out; data stays in IndexedDB unless you sign in to sync.
 
 ## Run locally

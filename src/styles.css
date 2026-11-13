@@ -427,3 +427,4 @@ span.seat:hover { box-shadow: 0 0 0 2px var(--heading); z-index: 2; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+.table td.break { min-width: 14ch; overflow-wrap: anywhere; word-break: normal; }
