@@ -174,6 +174,39 @@ test('importing a small synthetic Active users export creates recommendations an
   await expect(page.getByRole('link', { name: /E2E Contoso/ })).toContainText('4 accounts')
 })
 
+test('names from an import cannot break out of the generated PowerShell script or run as spreadsheet formulas', async ({ page }) => {
+  await page.goto('/app')
+  await page.getByRole('button', { name: 'New tenant' }).click()
+  await page.getByLabel('Tenant or client name').fill('Demo #> Write-Host TENANT-MARKER <#')
+  await page.getByRole('button', { name: 'Create and import' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Import Microsoft 365 exports' })
+  await dialog.locator('input[type=file]').setInputFiles(fixture('hostile-names.csv'))
+  await expect(dialog.getByText('4 users')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Import 1 report' }).click()
+  await expect(page.getByText(/Imported 1 report\. 3 recommendations\./)).toBeVisible()
+  await tab(page, 'Recommendations').click()
+  await page.getByRole('button', { name: /^Approve \d+ high confidence/ }).click()
+  await tab(page, 'Change script').click()
+
+  // Only ASCII quotes sit in the script text; every curly quote is a [char] code, and the tenant name cannot end the comment.
+  const code = page.locator('.code pre code')
+  await expect(code).toContainText("Upn = 'o''brien@demo.example'")
+  await expect(code).toContainText("Upn = ('' + 'anne' + [char]8217 + 's.office@demo.example')")
+  await expect(code).toContainText("Upn = ('' + 'marker' + [char]8217 + '; write-host injected-marker; ' + [char]8216 + '@demo.example')")
+  await expect(code).toContainText('Tenant:    Demo # > Write-Host TENANT-MARKER <#')
+  const script = await code.innerText()
+  expect(script).not.toMatch(/[\u2018\u2019\u201a\u201b]/)
+  expect(script.match(/#>/g)).toHaveLength(1)
+  await page.getByRole('button', { name: 'Rollback', exact: true }).click()
+  await expect(code).toContainText('License Trim ROLLBACK script')
+  expect(await code.innerText()).not.toMatch(/[\u2018\u2019\u201a\u201b]/)
+
+  // The planned-changes CSV: the formula-like display name is prefixed so a spreadsheet shows text; the savings stay numbers.
+  await page.getByRole('button', { name: /^CSV/ }).click()
+  await expect(code).toContainText("'=1+1 FORMULA-MARKER")
+  await expect(code).toContainText(',39.00,468.00,high,')
+})
+
 test('pasted CSV text imports like a file', async ({ page }) => {
   await page.goto('/app')
   await page.getByRole('button', { name: 'New tenant' }).click()

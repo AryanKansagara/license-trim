@@ -1,9 +1,31 @@
 // Generated artifacts: the Microsoft Graph PowerShell change script, its rollback, and a CSV of planned changes.
 import type { Sku } from './catalog.ts'
-import { toCsv } from './parse.ts'
+import { csvText, toCsv } from './parse.ts'
 import { REASON_LABEL, type Rec } from './rules.ts'
 
-const psq = (s: string) => `'${s.replace(/'/g, "''")}'`
+/**
+ * A PowerShell expression that evaluates to exactly `s`, whatever `s` holds. Printable ASCII goes into a single-quoted literal
+ * (only the ASCII ' needs doubling there). Everything else is emitted as a [char] code, so no quote-like character (PowerShell
+ * also treats U+2018 to U+201B as single quotes), newline or control character can ever sit inside the script text. Non-ASCII
+ * is escaped on purpose: Windows PowerShell 5.1 reads a script without a BOM as ANSI, where UTF-8 bytes of letters such as
+ * U+00D1 or U+0451 decode to a curly quote and would end the literal. The result is the same under every file encoding.
+ */
+const psq = (s: string) => {
+  const parts: string[] = []
+  let lit = ''
+  const flush = () => { if (lit) { parts.push(`'${lit}'`); lit = '' } }
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!
+    if (c >= 0x20 && c <= 0x7e) lit += ch === "'" ? "''" : ch
+    else { flush(); parts.push(c > 0xffff ? `[char]::ConvertFromUtf32(${c})` : `[char]${c}`) }
+  }
+  flush()
+  if (!parts.length) return "''"
+  // Lead with '' so the + always concatenates strings (a leading [char] would be added as a number).
+  return parts.length === 1 && parts[0].startsWith("'") ? parts[0] : `('' + ${parts.join(' + ')})`
+}
+/** Text for the <# #> header: one line, no control or invisible formatting characters, and never the comment terminator. */
+const psComment = (s: string) => s.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').replace(/\p{Cf}/gu, '').replace(/#>/g, '# >')
 const psArr = (xs: string[]) => `@(${xs.map(psq).join(', ')})`
 
 export interface ScriptOpts { tenant: string; generated: string; rollback?: boolean; /** Saved file name, used in the usage lines. */ file?: string }
@@ -25,12 +47,12 @@ export function changeScript(recs: Rec[], byId: Map<string, Sku>, o: ScriptOpts)
   })
   return `<#
   License Trim ${o.rollback ? 'ROLLBACK' : 'change'} script
-  Tenant:    ${o.tenant}
-  Generated: ${o.generated}
+  Tenant:    ${psComment(o.tenant)}
+  Generated: ${psComment(o.generated)}
   Changes:   ${recs.length} user${recs.length === 1 ? '' : 's'}${o.rollback ? ' (restores the licences the change script removed)' : `, $${monthly} per month at list price`}
 
-  Dry run (default):  .\\${file}
-  Apply the changes:  .\\${file} -Apply
+  Dry run (default):  .\\${psComment(file)}
+  Apply the changes:  .\\${psComment(file)} -Apply
 
   Requires the Microsoft Graph PowerShell SDK:  Install-Module Microsoft.Graph.Users, Microsoft.Graph.Identity.DirectoryManagement -Scope CurrentUser
   Needs a role that can assign licences (License Administrator or User Administrator).
@@ -49,6 +71,9 @@ function Resolve-Sku([string]$part) {
   foreach ($p in $part -split '\\|') { if ($skus.ContainsKey($p)) { return $skus[$p] } }
   throw "SKU $part is not subscribed in this tenant"
 }
+
+# Spreadsheets run a cell that starts with = + - @ as a formula, so the log marks such cells as text.
+function Protect-Cell($v) { if ("$v" -match '^[=+\\-@\\t\\r]') { "'$v" } else { $v } }
 
 $changes = @(
 ${rows.join(',\n')}
@@ -73,7 +98,7 @@ $log = foreach ($c in $changes) {
     }
   } catch { $status = "failed: $($_.Exception.Message)" }
   Write-Host ('{0,-45} -[{1}] +[{2}] {3}' -f $c.Upn, ($c.Remove -join ','), ($c.Add -join ','), $status)
-  [pscustomobject]@{ Upn = $c.Upn; Removed = ($c.Remove -join ';'); Added = ($c.Add -join ';'); Note = $c.Note; Status = $status }
+  [pscustomobject]@{ Upn = (Protect-Cell $c.Upn); Removed = ($c.Remove -join ';'); Added = ($c.Add -join ';'); Note = $c.Note; Status = $status }
 }
 
 $out = ".\\license-trim-${o.rollback ? 'rollback' : 'changes'}-$(Get-Date -Format yyyyMMdd-HHmm)$(if (-not $Apply) { '-dryrun' }).csv"
@@ -82,12 +107,17 @@ Write-Host "Log written to $out"
 `
 }
 
+/** Text cells are guarded against spreadsheet formulas (see csvText); the two saving columns are numbers and stay as they are. */
 export function changesCsv(recs: Rec[], byId: Map<string, Sku>, status: (r: Rec) => string): string {
   const names = (ids: string[]) => ids.map(id => byId.get(id)?.name ?? id).join('; ')
   const parts = (ids: string[]) => ids.map(id => byId.get(id)?.part ?? id).join(';')
   return toCsv([
     ['UserPrincipalName', 'DisplayName', 'CurrentLicences', 'RemoveSkuPartNumbers', 'AddSkuPartNumbers', 'TargetLicences', 'MonthlySaving', 'AnnualSaving', 'Confidence', 'Reasons', 'Caveats', 'Decision'],
-    ...recs.map(r => [r.upn, r.name, names(r.from), parts(r.remove), parts(r.add), names(r.to) || '(none)', r.monthly.toFixed(2), r.annual.toFixed(2), r.confidence, r.findings.map(f => f.text).join(' '), r.caveats.join(' '), status(r)]),
+    ...recs.map(r => [
+      ...[r.upn, r.name, names(r.from), parts(r.remove), parts(r.add), names(r.to) || '(none)'].map(csvText),
+      r.monthly.toFixed(2), r.annual.toFixed(2),
+      ...[r.confidence, r.findings.map(f => f.text).join(' '), r.caveats.join(' '), status(r)].map(csvText),
+    ]),
   ])
 }
 
@@ -159,3 +189,11 @@ $users | ForEach-Object {
 Remove-Item $tmp -Recurse -Force
 Write-Host "Wrote $Out and $($Out -replace '\\.csv$', '-skus.csv')"
 `
+
+/** Sign-in dates for the Active users export, which has none. Static: no user data is ever placed in it. */
+export const GRAPH_SIGNINS_SCRIPT = `Connect-MgGraph -Scopes 'User.Read.All','AuditLog.Read.All' -NoWelcome
+Get-MgUser -All -Property userPrincipalName,displayName,accountEnabled,createdDateTime,signInActivity |
+  Select-Object UserPrincipalName, DisplayName, AccountEnabled, CreatedDateTime,
+    @{n='LastSignInDateTime';e={$_.SignInActivity.LastSignInDateTime}},
+    @{n='LastNonInteractiveSignInDateTime';e={$_.SignInActivity.LastNonInteractiveSignInDateTime}} |
+  Export-Csv -NoTypeInformation -Path .\\entra-signins.csv`

@@ -1,14 +1,7 @@
 import { CATALOG_DATE, CATALOG_SOURCE, IDS_SOURCE, DEFAULT_CATALOG } from './engine/catalog.ts'
 import { DEFAULT_SETTINGS } from './engine/rules.ts'
-import { GRAPH_EXPORT_SCRIPT } from './engine/script.ts'
+import { GRAPH_EXPORT_SCRIPT, GRAPH_SIGNINS_SCRIPT } from './engine/script.ts'
 import { Code, fmtDate, fmtUsd, Link } from './ui.tsx'
-
-const SIGNINS_SCRIPT = `Connect-MgGraph -Scopes 'User.Read.All','AuditLog.Read.All' -NoWelcome
-Get-MgUser -All -Property userPrincipalName,displayName,accountEnabled,createdDateTime,signInActivity |
-  Select-Object UserPrincipalName, DisplayName, AccountEnabled, CreatedDateTime,
-    @{n='LastSignInDateTime';e={$_.SignInActivity.LastSignInDateTime}},
-    @{n='LastNonInteractiveSignInDateTime';e={$_.SignInActivity.LastNonInteractiveSignInDateTime}} |
-  Export-Csv -NoTypeInformation -Path .\\entra-signins.csv`
 
 const REPORTS: { name: string; where: string; cols: string; use: string }[] = [
   { name: 'Active users export', where: 'Users → Active users → Export users', cols: 'User principal name, Display name, Licenses (joined with +), Block credential, When created', use: 'Licences per user, blocked accounts, account age' },
@@ -51,7 +44,7 @@ export default function Docs() {
 
       <h2 id="signins">Entra sign-in activity</h2>
       <p>The Active users export does not include last sign-in. Get it from Microsoft Graph (the Entra admin center's user download does not reliably include it):</p>
-      <Code code={SIGNINS_SCRIPT} label="entra-signins.ps1" />
+      <Code code={GRAPH_SIGNINS_SCRIPT} label="entra-signins.ps1" />
       <p className="small muted"><code>lastSignInDateTime</code> is interactive sign-ins only; License Trim also uses <code>lastNonInteractiveSignInDateTime</code> (token refreshes from mobile mail and Teams clients) and takes the later of the two.</p>
 
       <h2 id="rules">How the rules work</h2>
