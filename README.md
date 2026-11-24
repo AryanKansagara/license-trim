@@ -36,4 +36,13 @@ npm run build
 
 Optional sync needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`.
 
+End-to-end tests (Playwright, Chromium) run against the production build served by `vite preview` on port 4417 (override with `E2E_PORT`). They run signed out, stub the font stylesheet and block every other outside request, and fail on any page error.
+
+```
+npx playwright install chromium   # once; Linux CI also needs --with-deps
+npm run test:e2e                  # builds, then runs e2e/
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs `npm ci`, build, unit tests and the E2E suite on every pull request and push to `main`.
+
 Built by Aryan Kansagara.
