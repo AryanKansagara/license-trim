@@ -34,6 +34,8 @@ npm test
 npm run build
 ```
 
+`npm test` also parses the generated PowerShell scripts with PowerShell's own parser (parse only; nothing generated is ever run). That needs `pwsh` on the PATH: it is skipped with a note when `pwsh` is missing, and required when `CI` or `REQUIRE_PWSH=1` is set (GitHub's Ubuntu runners include it).
+
 Optional sync needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`.
 
 End-to-end tests (Playwright, Chromium) run against the production build served by `vite preview` on port 4417 (override with `E2E_PORT`). They run signed out, stub the font stylesheet and block every other outside request, and fail on any page error.

@@ -20,13 +20,20 @@ export function parseCsv(text: string): string[][] {
     } else cell += c
   }
   if (cell || row.length) { row.push(cell); rows.push(row) }
-  return rows.map(r => r.map(c => c.trim()))
+  return rows.map(r => r.map(c => unguardCsvText(c.trim())))
 }
+
+// A spreadsheet runs a cell that starts with = + - @ tab or CR as a formula. csvText marks such text with a leading ' (shown as
+// text, not run); parseCsv takes exactly one off again, so an exported file imports back to the original values. Cells that
+// already start with ' before such a character get one more, so the round trip stays exact.
+const FORMULA_START = /^'*[=+\-@\t\r]/
+export const csvText = (s: string) => FORMULA_START.test(s) ? `'${s}` : s
+const unguardCsvText = (c: string) => /^'+[=+\-@\t\r]/.test(c) ? c.slice(1) : c
 
 export function toCsv(rows: (string | number | boolean | null | undefined)[][]): string {
   return rows.map(r => r.map(v => {
     const s = v === null || v === undefined ? '' : String(v)
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }).join(',')).join('\n') + '\n'
 }
 

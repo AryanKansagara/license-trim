@@ -1,0 +1,5 @@
+Block credential,City,Country/Region,Department,DirSyncEnabled,Display name,Fax,First name,Last dirsync time,Last name,Last password change time stamp,License assignment details,Licenses,Mobile Phone,Oath token metadata,Object Id,Office,Password never expires,Phone number,Postal code,Preferred data location,Preferred language,Proxy addresses,Release track,Soft deletion time stamp,State,Street address,Strong password required,Title,Usage location,User principal name,When created
+True,,,Finance,,=1+1 FORMULA-MARKER,,,,,,,Microsoft 365 E3,,,,,,,,,,,,,,,,,,marker’; Write-Host INJECTED-MARKER; ‘@demo.example,8/12/2022 9:31:44 PM
+True,,,Finance,,Pat O'Brien,,,,,,,Microsoft 365 E5,,,,,,,,,,,,,,,,,,o'brien@demo.example,8/12/2022 9:31:44 PM
+True,,,Finance,,Anne Smith,,,,,,,Microsoft 365 E3,,,,,,,,,,,,,,,,,,anne’s.office@demo.example,8/12/2022 9:31:44 PM
+False,,,Finance,,Active Four,,,,,,,Microsoft 365 Business Standard,,,,,,,,,,,,,,,,,,active.four@demo.example,8/12/2022 9:31:44 PM
